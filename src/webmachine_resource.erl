@@ -125,7 +125,7 @@ wrap(Mod, Args) ->
         _ ->
             {stop, bad_init_arg}
     end.
-
+%% 执行相应的请求
 do(#wm_resource{}=Res, Fun, ReqProps) ->
     #wm_resource{module=R_Mod, modstate=R_ModState,
                  modexports=R_ModExports, trace=R_Trace} = Res,

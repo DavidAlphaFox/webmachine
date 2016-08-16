@@ -24,7 +24,7 @@
 -export([handle_request/2]).
 -export([do_log/1]).
 -include("webmachine_logger.hrl").
-
+%% 处理请求
 handle_request(Resource, ReqState) ->
     _ = [erase(X) || X <- [decision, code, req_body, bytes_written, tmp_reqstate]],
     put(resource, Resource),
@@ -38,9 +38,12 @@ handle_request(Resource, ReqState) ->
 
 wrcall(X) ->
     RS0 = get(reqstate),
+    %% 从原始状态上创建请求
     Req = webmachine_request:new(RS0),
+    %% 直接调用相应的函数，得到结果
     {Response, RS1} = Req:call(X),
     put(reqstate, RS1),
+    %% 将结果作为最后的返回值
     Response.
 
 resource_call(Fun) ->
@@ -55,10 +58,12 @@ get_header_val(H) -> wrcall({get_req_header, H}).
 method() -> wrcall(method).
 
 d(DecisionID) ->
+    %% 放入decision的ID
     put(decision, DecisionID),
     log_decision(DecisionID),
+    %% 进行决策流程
     decision(DecisionID).
-
+%% 进行相应
 respond(Code) when is_integer(Code) ->
     respond({Code, undefined});
 respond({_, _}=CodeAndPhrase) ->
@@ -84,7 +89,7 @@ respond({304, _ReasonPhrase}=CodeAndPhrase, Resource, EndTime) ->
     finish_response(CodeAndPhrase, Resource, EndTime);
 respond(CodeAndPhrase, Resource, EndTime) ->
     finish_response(CodeAndPhrase, Resource, EndTime).
-
+%% 最终
 finish_response({Code, _}=CodeAndPhrase, Resource, EndTime) ->
     put(code, Code),
     wrcall({set_response_code, CodeAndPhrase}),
@@ -141,11 +146,13 @@ decision_test_fn(Test,TestFn,TrueFlow,FalseFlow) ->
         true -> decision_flow(TrueFlow, Test);
         false -> decision_flow(FalseFlow, Test)
     end.
-
+%% 如果返回的结果是数字
+%% 进行相应
 decision_flow(X, TestResult) when is_integer(X) ->
     if X >= 500 -> error_response(X, TestResult);
        true -> respond(X)
     end;
+%% 再次进决策流程
 decision_flow(X, _TestResult) when is_atom(X) -> d(X).
 
 do_log(LogData) ->
@@ -157,15 +164,18 @@ log_decision(DecisionID) ->
 
 %% "Service Available"
 decision(v3b13) ->
+    %% 资源可用测试
     decision_test(resource_call(ping), pong, v3b13b, 503);
 decision(v3b13b) ->
     decision_test(resource_call(service_available), true, v3b12, 503);
 %% "Known method?"
 decision(v3b12) ->
+    %% 可用方法
     decision_test(lists:member(method(), resource_call(known_methods)),
                   true, v3b11, 501);
 %% "URI too long?"
 decision(v3b11) ->
+    %% URL是否超长
     decision_test(resource_call(uri_too_long), true, 414, v3b10);
 %% "Method allowed?"
 decision(v3b10) ->
