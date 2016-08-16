@@ -28,12 +28,17 @@
                      resource_module_option]).
 
 -define (WM_OPTION_DEFAULTS, [{error_handler, webmachine_error_handler}]).
-
+%% 启动Mochiweb
 start(Options) ->
+    %% 分析Webmachine的配置选项
     {DispatchList, PName, DGroup, WMOptions, OtherOptions} = get_wm_options(Options),
+    %% 初始化路有表
     webmachine_router:init_routes(DGroup, DispatchList),
+    %% 更改webmachine环境的配置文件
     _ = [application_set_unless_env_or_undef(K, V) || {K, V} <- WMOptions],
+    %% 配置mochiweb的名字
     MochiName = list_to_atom(to_list(PName) ++ "_mochiweb"),
+    %% 启动Mochiweb和配置指定的LoopFun
     LoopFun = fun(X) -> loop(DGroup, X) end,
     mochiweb_http:start([{name, MochiName}, {loop, LoopFun} | OtherOptions]).
 
@@ -46,22 +51,31 @@ stop(Name) ->
     mochiweb_http:stop(Name).
 
 loop(Name, MochiReq) ->
+    %% 当新的请求进入
     case webmachine:new_request(mochiweb, MochiReq) of
       {{error, NewRequestError}, ErrorReq} ->
         handle_error(500, {error, NewRequestError}, ErrorReq);
       Req ->
+        %% 得到路有
         DispatchList = webmachine_router:get_routes(Name),
+        %% 得到forward相关的headers
         Host = case host_headers(Req) of
+                   %% 有则取一个就可以了
                    [H|_] -> H;
                    [] -> []
                end,
+        %% 请求的路径
         {Path, _} = Req:path(),
+        %% 得到相应的请求数据
         {RD, _} = Req:get_reqdata(),
 
         %% Run the dispatch code, catch any errors...
         try webmachine_dispatcher:dispatch(Host, Path, DispatchList, RD) of
+            %% 没有任何路由匹配
             {no_dispatch_match, _UnmatchedHost, _UnmatchedPathTokens} ->
+                %% 这个时候直接爆404就可以了
                 handle_error(404, {none, none, []}, Req);
+            %% 匹配到的模块，模块配置
             {Mod, ModOpts, HostTokens, Port, PathTokens, Bindings,
              AppRoot, StringPath} ->
                 BootstrapResource = webmachine_resource:new(x,x,x,x),
@@ -72,6 +86,7 @@ loop(Name, MochiReq) ->
                     {ok, Resource} = BootstrapResource:wrap(Mod, ModOpts),
                     {ok,RS2} = XReq1:set_metadata('resource_module',
                                                   resource_module(Mod, ModOpts)),
+                    %% 通过决策流，进行请求处理
                     webmachine_decision_core:handle_request(Resource, RS2)
                 catch
                     error:Error ->
@@ -79,6 +94,7 @@ loop(Name, MochiReq) ->
                 end
         catch
             Type : Error ->
+                %% 内部错误，500
                 handle_error(500, {Type, Error}, Req)
         end
     end.

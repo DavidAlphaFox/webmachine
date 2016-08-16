@@ -27,6 +27,7 @@
 %% @spec start() -> ok
 %% @doc Start the webmachine server.
 start() ->
+    %%确保所有的文件都被加载到系统中
     webmachine_deps:ensure(),
     ok = ensure_started(crypto),
     ok = ensure_started(webmachine).
@@ -46,12 +47,18 @@ ensure_started(App) ->
 stop() ->
     application:stop(webmachine).
 
+%% 处理新的请求
 new_request(mochiweb, Request) ->
+    %% 得到方法
     Method = Request:get(method),
+    %% 得到协议
     Scheme = Request:get(scheme),
+    %% 得到版本
     Version = Request:get(version),
+    %% 得到重写模块
     {Headers, RawPath} = case application:get_env(webmachine, rewrite_module) of
         {ok, RewriteMod} ->
+            %% 如果有重写模块，进行重写
             do_rewrite(RewriteMod,
                        Method,
                        Scheme,
@@ -59,10 +66,12 @@ new_request(mochiweb, Request) ->
                        Request:get(headers),
                        Request:get(raw_path));
         undefined ->
+            %% 否则通过Mochiweb的方法获得请求头和原始的路径
             {Request:get(headers), Request:get(raw_path)}
     end,
+    %% 得到请求原始的socket
     Socket = Request:get(socket),
-
+    %% 创建原始的请求
     InitialReqData = wrq:create(Method,Scheme,Version,RawPath,Headers),
     InitialLogData = #wm_log_data{start_time=os:timestamp(),
                                   method=Method,
@@ -71,12 +80,12 @@ new_request(mochiweb, Request) ->
                                   version=Version,
                                   response_code=404,
                                   response_length=0},
-
+    %% 创建原始的状态                                  
     InitState = #wm_reqstate{socket=Socket,
                              log_data=InitialLogData,
                              reqdata=InitialReqData},
     InitReq = {webmachine_request,InitState},
-
+    %% 得到对端的信息
     case InitReq:get_peer() of
       {ErrorGetPeer = {error,_}, ErrorGetPeerReqState} ->
         % failed to get peer
@@ -97,7 +106,7 @@ new_request(mochiweb, Request) ->
         end
     end.
 
-
+%% 使用重写模块进行重写
 do_rewrite(RewriteMod, Method, Scheme, Version, Headers, RawPath) ->
     case RewriteMod:rewrite(Method, Scheme, Version, Headers, RawPath) of
         %% only raw path has been rewritten (older style rewriting)

@@ -55,6 +55,8 @@ upgrade() ->
 %% @spec init([]) -> SupervisorTree
 %% @doc supervisor callback.
 init([]) ->
+    %% 初始化webmachine的router
+    %% 初始化webmachine的日志handler
     Router =
         {webmachine_router,
          {webmachine_router, start_link, []},

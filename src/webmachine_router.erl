@@ -121,6 +121,7 @@ start_link() ->
     %% We expect to only be called from webmachine_sup
     %%
     %% Set up the ETS configuration table.
+    %% 创建ETS表，读并发
     try ets:new(?MODULE, [named_table, public, set, {keypos, 1},
                 {read_concurrency, true}]) of
         _Result ->
@@ -192,7 +193,7 @@ filter_by_resource(Resource) ->
        (Other, Acc) -> % dispatch not mentioning this resource
             [Other|Acc]
     end.
-
+%% 得到路有表
 get_dispatch_list(Name) ->
     case ets:lookup(?MODULE, Name) of
         [{Name, Dispatch}] ->
@@ -200,7 +201,7 @@ get_dispatch_list(Name) ->
         [] ->
             []
     end.
-
+%% 更新路有表
 set_dispatch_list(Name, DispatchList) ->
     true = ets:insert(?MODULE, {Name, DispatchList}),
     ok.
