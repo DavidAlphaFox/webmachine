@@ -44,6 +44,7 @@
 
 % @doc Find the multipart boundary for a request.
 % @spec find_boundary(wrq:wm_reqdata()) -> boundary()
+%% 寻找分割线
 find_boundary(ReqData) ->
     ContentType = wrq:get_req_header("content-type", ReqData),
     string:substr(ContentType, string:str(ContentType, "boundary=") 
@@ -62,6 +63,7 @@ get_all_parts(Body, Boundary) when is_binary(Body), is_list(Boundary) ->
 %   have 0-arity and the same return type as stream_parts/2 itself.
 % @spec stream_parts(wm_stream(), boundary()) ->
 %                                    'done_parts' | {fpart(), function()}
+%% 分割包体
 stream_parts(StreamStruct, Boundary) ->
     stream_form(StreamStruct, "--" ++ Boundary, []).
 
@@ -130,12 +132,13 @@ extract_names(NamesString) ->
 cheap_parse_header(HeadBin) ->
     [K,V] = re:split(HeadBin, ": ", [{parts,2}]),
     {K,V}.
-
+%% 得到parts
 getparts1(done_parts, Acc) ->
     lists:reverse(Acc);
 getparts1({Part, Streamer}, Acc) ->
     getparts1(Streamer(), [Part|Acc]).
-
+%% 循环发送
+%% 返回要发送的数据和一个包含剩余数据的函数
 send_streamed_body(Body, Max) ->
     HunkLen=8*Max,
     case Body of        

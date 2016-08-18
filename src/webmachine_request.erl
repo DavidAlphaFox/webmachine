@@ -462,7 +462,7 @@ read_whole_stream({Hunk,Next}, Acc0, MaxRecvBody, SizeAcc) ->
                                        MaxRecvBody, SizeAcc + HunkSize)
             end
     end.
-
+%% chuncked的body
 recv_stream_body(PassedState=#wm_reqstate{reqdata=RD}, MaxHunkSize) ->
     put(mochiweb_request_recv, true),
     case get_header_value("expect", PassedState) of
@@ -473,6 +473,7 @@ recv_stream_body(PassedState=#wm_reqstate{reqdata=RD}, MaxHunkSize) ->
         _Else ->
             ok
     end,
+    %% 获取body的大小
     case body_length(PassedState) of
         {unknown_transfer_encoding, X} -> exit({unknown_transfer_encoding, X});
         undefined -> {<<>>, done};
@@ -494,7 +495,7 @@ recv_unchunked_body(Socket, MaxHunk, DataLeft) ->
              fun() -> recv_unchunked_body(Socket, MaxHunk, DataLeft-MaxHunk)
              end}
     end.
-
+%% 读取chunked的body的大小
 recv_chunked_body(Socket, MaxHunk) ->
     case read_chunk_length(Socket, false) of
         0 -> {<<>>, done};
