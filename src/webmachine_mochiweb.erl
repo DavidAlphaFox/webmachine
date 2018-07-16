@@ -122,7 +122,7 @@ loop(Name, MochiReq) ->
                 handle_error(500, {Type, Error}, Req)
         end
     end.
-
+%% 从mochiweb中获得所有的相应的http请求信息
 -spec new_webmachine_req(mochiweb_request()) ->
                                 {module(),#wm_reqstate{}}
                                     |{{error, term()}, #wm_reqstate{}}.
@@ -247,7 +247,7 @@ application_set_unless_env(App, Var, Value) ->
         false ->
             application:set_env(App, Var, Value)
     end.
-
+%% 使用，进行分割，说明这是个多层代理
 %% X-Forwarded-Host/Server can contain comma-separated values.
 %% Reference: https://httpd.apache.org/docs/current/mod/mod_proxy.html#x-headers
 %% In that case, we'll take the first as our host, since proxies will append
@@ -264,7 +264,7 @@ host_from_host_values(HostValues) ->
                     H
             end
     end.
-
+%% 获得请求头中的host子段
 host_headers(Req) ->
     [ V || {V,_ReqState} <- [webmachine_request:get_header_value(H, Req)
                              || H <- ["x-forwarded-host",

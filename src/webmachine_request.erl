@@ -485,7 +485,7 @@ recv_stream_body(PassedState=#wm_reqstate{reqdata=RD}, MaxHunkSize) ->
         Length -> recv_unchunked_body(PassedState#wm_reqstate.socket,
                                       MaxHunkSize, Length)
     end.
-
+%% 使用高阶函数不断的接收数据
 recv_unchunked_body(Socket, MaxHunk, DataLeft) ->
     case MaxHunk >= DataLeft of
         true ->

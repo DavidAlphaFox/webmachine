@@ -146,7 +146,7 @@ req_body(_RD = #wm_reqdata{wm_state=ReqState0,max_recv_body=MRB}) ->
     {ReqResp, ReqState} = webmachine_request:req_body(MRB, Req),
     put(tmp_reqstate, ReqState),
     maybe_conflict_body(ReqResp).
-
+%% 流式数据
 stream_req_body(_RD = #wm_reqdata{wm_state=ReqState0}, MaxHunk) ->
     Req = webmachine_request:new(ReqState0),
     {ReqResp, ReqState} = webmachine_request:stream_req_body(MaxHunk, Req),

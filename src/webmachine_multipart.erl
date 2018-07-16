@@ -67,8 +67,8 @@ get_all_parts(Body, Boundary) when is_binary(Body), is_list(Boundary) ->
 stream_parts(StreamStruct, Boundary) ->
     stream_form(StreamStruct, "--" ++ Boundary, []).
 
-stream_form(_, _, [<<"----\n">>|_]) -> done_parts;
-stream_form(_, _, [<<"--\n">>|_]) -> done_parts;
+stream_form(_, _, [<<"----\n">>|_]) -> done_parts; %% 代表整个form已经结束了
+stream_form(_, _, [<<"--\n">>|_]) -> done_parts; 
 stream_form({Hunk, Next}, Boundary, []) ->
     stream_form(get_more_data(Next), Boundary, re:split(Hunk, Boundary,[]));
 stream_form({Hunk, Next}, Boundary, [<<>>|DQ]) ->

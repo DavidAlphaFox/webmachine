@@ -129,7 +129,7 @@ decision_test(Test,TestVal,TrueFlow,FalseFlow) ->
         {error, Reason} -> error_response(Reason);
         {error, Reason0, Reason1} -> error_response({Reason0, Reason1});
         {halt, Code} -> respond(Code);
-        TestVal -> decision_flow(TrueFlow, Test);
+        TestVal -> decision_flow(TrueFlow, Test); %% decision_flow是依赖返回结果类型进行判断的
         _ -> decision_flow(FalseFlow, Test)
     end.
 
@@ -159,7 +159,7 @@ do_log(LogData) ->
 log_decision(DecisionID) ->
     Resource = get(resource),
     webmachine_resource:log_d(DecisionID, Resource).
-
+%% 所有的流程的开始
 %% "Service Available"
 decision(v3b13) ->
     decision_test(resource_call(service_available), true, v3b12, 503);%% 资源可用测试
