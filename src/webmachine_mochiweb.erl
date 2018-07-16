@@ -105,19 +105,12 @@ loop(Name, MochiReq) ->
                              Bindings,HostTokens,Port,
                              PathTokens,AppRoot,StringPath,Req),
                 try
-<<<<<<< HEAD
-                    {ok, Resource} = BootstrapResource:wrap(Mod, ModOpts),
-                    {ok,RS2} = XReq1:set_metadata('resource_module',
-                                                  resource_module(Mod, ModOpts)),
-                    %% 通过决策流，进行请求处理
-=======
                     {ok, Resource} = webmachine_resource:wrap(
                                        Mod, ModOpts),
                     {ok, RS2} = webmachine_request:set_metadata(
                                   'resource_module',
                                   resource_module(Mod, ModOpts),
                                   XReq1),
->>>>>>> c6c2f2d4e41a2761840db7f3668a4e263a93d089
                     webmachine_decision_core:handle_request(Resource, RS2)
                 catch
                     error:Error ->
