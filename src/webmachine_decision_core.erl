@@ -22,7 +22,6 @@
 -author('Andy Gross <andy@basho.com>').
 -author('Bryan Fink <bryan@basho.com>').
 -export([handle_request/2]).
--export([do_log/1]).
 -include("webmachine_logger.hrl").
 %% 处理请求
 handle_request(Resource, ReqState) ->
@@ -40,15 +39,14 @@ wrcall(X) ->
     RS0 = get(reqstate),
     %% 从原始状态上创建请求
     Req = webmachine_request:new(RS0),
-    %% 直接调用相应的函数，得到结果
-    {Response, RS1} = Req:call(X),
+    {Response, RS1} = webmachine_request:call(X, Req),   %% 直接调用相应的函数，得到结果
     put(reqstate, RS1),
     %% 将结果作为最后的返回值
     Response.
 
 resource_call(Fun) ->
     Resource = get(resource),
-    {Reply, NewResource, NewRS} = Resource:do(Fun,get()),
+    {Reply, NewResource, NewRS} = webmachine_resource:do(Fun,get(),Resource),
     put(resource, NewResource),
     put(reqstate, NewRS),
     Reply.
@@ -102,7 +100,7 @@ finish_response({Code, _}=CodeAndPhrase, Resource, EndTime) ->
                                    end_time=EndTime,
                                    notes=Notes},
     spawn(fun() -> do_log(LogData) end),
-    Resource:stop().
+    webmachine_resource:stop(Resource).
 
 error_response(Reason) ->
     error_response(500, Reason).
@@ -160,14 +158,11 @@ do_log(LogData) ->
 
 log_decision(DecisionID) ->
     Resource = get(resource),
-    Resource:log_d(DecisionID).
+    webmachine_resource:log_d(DecisionID, Resource).
 
 %% "Service Available"
 decision(v3b13) ->
-    %% 资源可用测试
-    decision_test(resource_call(ping), pong, v3b13b, 503);
-decision(v3b13b) ->
-    decision_test(resource_call(service_available), true, v3b12, 503);
+    decision_test(resource_call(service_available), true, v3b12, 503);%% 资源可用测试
 %% "Known method?"
 decision(v3b12) ->
     %% 可用方法

@@ -20,7 +20,16 @@
 -include("wm_reqdata.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--compile(export_all).
+-export([size_stream_raises_error/2, process_post_for_created_p11/3, get_streamed_body/2, send_streamed_body/2,
+         accept_text/2, writer_response/2, known_length_body/2, range_response/2, stream_content_md5/0,
+         validate_checksum_for_md5stream/3, process_post_for_md5_stream/3, init/1, service_available/2,
+         validate_content_checksum/2, is_authorized/2, allowed_methods/2, known_methods/2, uri_too_long/2,
+         known_content_type/2, valid_entity_length/2, malformed_request/2, forbidden/2, valid_content_headers/2,
+         content_types_provided/2, content_types_accepted/2, language_available/2, charsets_provided/2,
+         encodings_provided/2, resource_exists/2, generate_etag/2, last_modified/2, moved_permanently/2,
+         moved_temporarily/2, previously_existed/2, allow_missing_post/2, post_is_create/2, process_post/2,
+         create_path/2, is_conflict/2, multiple_choices/2, base_uri/2, base_uri_add_slash/1, expires/2,
+         delete_resource/2, delete_completed/2, to_html/2]).
 
 -define(RESOURCE, atom_to_list(?MODULE)).
 -define(RESOURCE_PATH, "/" ++ ?RESOURCE).
@@ -240,8 +249,6 @@ md5(Bin) ->
 %%
 core_tests() ->
     [fun service_unavailable/0,
-     fun ping_invalid/0,
-     fun ping_error/0,
      fun internal_server_error_o18/0,
      fun not_implemented_b12/0,
      fun not_implemented_b6/0,
@@ -305,7 +312,7 @@ core_tests() ->
      fun head_length_access_for_cs/0,
      fun get_known_length_for_cs/0,
      fun get_for_range_capable_stream/0
-     %% known_failure -- fun stream_content_md5/0
+     % known_failure -- fun stream_content_md5/0
     ].
 
 decision_core_test_() ->
@@ -374,24 +381,6 @@ service_unavailable() ->
     ?assertEqual(ExpectedDecisionTrace, get_decision_ids()),
     ok.
 
-%% 503 result via B13 (at ping)
-ping_invalid() ->
-                                                % "breakout" for "anything other than pong"
-    put_setting(ping, breakout),
-    {ok, Result} = httpc:request(head, {url(), []}, [], []),
-    ?assertMatch({{"HTTP/1.1", 503, "Service Unavailable"}, _, _}, Result),
-    ExpectedDecisionTrace = ?PATH_TO_B13,
-    ?assertEqual(ExpectedDecisionTrace, get_decision_ids()),
-    ok.
-
-%% 500 error response result via B13 (ping raises error)
-ping_error() ->
-    put_setting(ping, ping_raise_error),
-    {ok, Result} = httpc:request(head, {url(), []}, [], []),
-    ?assertMatch({{"HTTP/1.1", 500, "Internal Server Error"}, _, _}, Result),
-    ExpectedDecisionTrace = ?PATH_TO_B13,
-    ?assertEqual(ExpectedDecisionTrace, get_decision_ids()),
-    ok.
 
 %% 500 error response via O18 from a callback raising an error
 internal_server_error_o18() ->
@@ -491,7 +480,9 @@ non_standard_method_501() ->
     Port = wm_integration_test_util:get_port(Ctx),
     Url = wm_integration_test_util:url(Ctx, "foo"),
     {ok, Sock} = gen_tcp:connect("localhost", Port, [binary, {active,false}]),
-    ok = gen_tcp:send(Sock, ["FOO ", Url, " HTTP/1.1\r\nConnection: close\r\n\r\n"]),
+    ok = gen_tcp:send(Sock, ["FOO ", Url, " HTTP/1.1\r\n",
+                             "Host: http://localhost:", integer_to_list(Port),
+                             "\r\n\r\n"]),
     ?assertMatch({ok, <<"HTTP/1.1 501 Not Implemented", _/binary>>},
                  gen_tcp:recv(Sock, 0, 2000)),
     ok = gen_tcp:close(Sock),
@@ -506,7 +497,9 @@ non_standard_method_200() ->
     Port = wm_integration_test_util:get_port(Ctx),
     Url = wm_integration_test_util:url(Ctx, "foo"),
     {ok, Sock} = gen_tcp:connect("localhost", Port, [binary, {active,false}]),
-    ok = gen_tcp:send(Sock, [Method, " ", Url, " HTTP/1.1\r\nConnection: close\r\n\r\n"]),
+    ok = gen_tcp:send(Sock, [Method, " ", Url, " HTTP/1.1\r\n",
+                             "Host: http://localhost:", integer_to_list(Port),
+                             "\r\n\r\n"]),
     ?assertMatch({ok, <<"HTTP/1.1 200 OK\r\n", _/binary>>},
                  gen_tcp:recv(Sock, 0, 2000)),
     ok = gen_tcp:close(Sock),
@@ -1376,13 +1369,6 @@ url(Path) ->
 
 init([]) ->
     {ok, undefined}.
-
-ping(ReqData, State) ->
-    Setting = lookup_setting(ping),
-    case Setting of
-        ping_raise_error -> error(foobar);
-        _ -> {Setting, ReqData, State}
-    end.
 
 service_available(ReqData, Context) ->
     Setting = lookup_setting(service_available),

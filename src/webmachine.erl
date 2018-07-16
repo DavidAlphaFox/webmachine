@@ -17,12 +17,18 @@
 -module(webmachine).
 -author('Justin Sheehy <justin@basho.com>').
 -author('Andy Gross <andy@basho.com>').
--export([start/0, stop/0]).
--export([new_request/2]).
+-export([start/0, stop/0, new_request/2]).
 
--include("webmachine_logger.hrl").
--include("wm_reqstate.hrl").
--include("wm_reqdata.hrl").
+-type headers() :: webmachine_headers:t().
+-type response_body() :: iodata()
+                       | {stream, StreamBody::any()}
+                       | {known_length_stream, non_neg_integer(), StreamBody::any()}
+                       | {stream, non_neg_integer(), fun()} %% TODO: type for fun()
+                       | {writer, WrtieBody::any()}
+                       | {file, IoDevice::any()}.
+
+
+-export_type([headers/0, response_body/0]).
 
 %% @spec start() -> ok
 %% @doc Start the webmachine server.
@@ -47,6 +53,7 @@ ensure_started(App) ->
 stop() ->
     application:stop(webmachine).
 
+<<<<<<< HEAD
 %% 处理新的请求
 new_request(mochiweb, Request) ->
     %% 得到方法
@@ -115,6 +122,10 @@ do_rewrite(RewriteMod, Method, Scheme, Version, Headers, RawPath) ->
         %% headers and raw path rewritten (new style rewriting)
         {NewHeaders, NewPath} -> {NewHeaders,NewPath}
     end.
+=======
+new_request(mochiweb, MochiReq) ->
+    webmachine_mochiweb:new_webmachine_req(MochiReq).
+>>>>>>> c6c2f2d4e41a2761840db7f3668a4e263a93d089
 
 %%
 %% TEST
