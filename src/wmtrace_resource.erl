@@ -5,8 +5,7 @@
 -export([add_dispatch_rule/2,
          remove_dispatch_rules/0]).
 
--export([ping/2,
-         init/1,
+-export([init/1,
          resource_exists/2,
          content_types_provided/2,
          produce_html/2,
@@ -50,9 +49,6 @@ remove_dispatch_rules() ->
 %%
 %% Resource
 %%
-
-ping(ReqData, State) ->
-    {pong, ReqData, State}.
 
 init(Config) ->
     {trace_dir, TraceDir} = proplists:lookup(trace_dir, Config),
@@ -243,11 +239,12 @@ aggregate_trace_part({result, Module, Function, Result},
      [{Decision,[{Module, Function, Args, Result}|Calls]}|Acc]};
 aggregate_trace_part({not_exported, Module, Function, Args},
                      {Q, R, [{Decision,Calls}|Acc]}) ->
-    {Q, maybe_extract_response(Function, Args, R),
+    {maybe_extract_request(Function, Args, Q),
+     maybe_extract_response(Function, Args, R),
      [{Decision,[{Module, Function, Args, wmtrace_not_exported}|Calls]}
       |Acc]}.
 
-maybe_extract_request(ping, [ReqData,_], _) ->
+maybe_extract_request(service_available, [ReqData, _], _) ->
     ReqData;
 maybe_extract_request(_, _, R) ->
     R.

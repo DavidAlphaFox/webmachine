@@ -1,1 +1,4 @@
-[{<<"mochiweb">>,{pkg,<<"mochiweb">>,<<"2.12.2">>},0}].
+[{<<"mochiweb">>,
+  {git,"https://github.com/mochi/mochiweb",
+       {ref,"23dc11959affd9b0849c2ac0ff4200c1c82aa80c"}},
+  0}].

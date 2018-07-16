@@ -18,7 +18,36 @@
 -module(webmachine_mochiweb).
 -author('Justin Sheehy <justin@basho.com>').
 -author('Andy Gross <andy@basho.com>').
--export([start/1, stop/0, stop/1, loop/2]).
+-export([start/1, stop/0, stop/1, loop/2, new_webmachine_req/1]).
+
+-include("webmachine_logger.hrl").
+-include("wm_reqstate.hrl").
+-include("wm_reqdata.hrl").
+
+-type mochiweb_request() ::
+        {
+          mochiweb_request,
+          [any()]
+        }.
+%% [any()] always looks like this. Basically it should be a record,
+%% but is a list inside a tuple. There are more specific types out
+%% there I'm sure, but I have better things to do with my time than
+%% typespec a module from 2007. I might come back and make these more
+%% specific if I encounter anything worth while, but since they can't
+%% be included in the spec anyway, it's worthless().
+
+%% [
+%%  Socket :: any(),
+%%  Opts :: any(),
+%%  Method :: any(),
+%%  RawPath :: any(),
+%%  Version :: any(),
+%%  Headers :: any()
+%% ]
+
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
 
 %% The `log_dir' option is deprecated, but remove it from the
 %% options list if it is present
@@ -38,8 +67,7 @@ start(Options) ->
     _ = [application_set_unless_env_or_undef(K, V) || {K, V} <- WMOptions],
     %% 配置mochiweb的名字
     MochiName = list_to_atom(to_list(PName) ++ "_mochiweb"),
-    %% 启动Mochiweb和配置指定的LoopFun
-    LoopFun = fun(X) -> loop(DGroup, X) end,
+    LoopFun = fun(X) -> ?MODULE:loop(DGroup, X) end,%% 启动Mochiweb和配置指定的LoopFun
     mochiweb_http:start([{name, MochiName}, {loop, LoopFun} | OtherOptions]).
 
 stop() ->
@@ -50,25 +78,20 @@ stop() ->
 stop(Name) ->
     mochiweb_http:stop(Name).
 
+-spec loop(any(),
+           mochiweb_request()) ->
+                  ok.
 loop(Name, MochiReq) ->
-    %% 当新的请求进入
-    case webmachine:new_request(mochiweb, MochiReq) of
+    case new_webmachine_req(MochiReq) of     %% 当新的请求进入
       {{error, NewRequestError}, ErrorReq} ->
         handle_error(500, {error, NewRequestError}, ErrorReq);
       Req ->
         %% 得到路有
         DispatchList = webmachine_router:get_routes(Name),
-        %% 得到forward相关的headers
-        Host = case host_headers(Req) of
-                   %% 有则取一个就可以了
-                   [H|_] -> H;
-                   [] -> []
-               end,
-        %% 请求的路径
-        {Path, _} = Req:path(),
-        %% 得到相应的请求数据
-        {RD, _} = Req:get_reqdata(),
-
+        HostHeaders = host_headers(Req),
+        Host = host_from_host_values(HostHeaders),
+        {Path, _} = webmachine_request:path(Req),
+        {RD, _} = webmachine_request:get_reqdata(Req),
         %% Run the dispatch code, catch any errors...
         try webmachine_dispatcher:dispatch(Host, Path, DispatchList, RD) of
             %% 没有任何路由匹配
@@ -78,15 +101,23 @@ loop(Name, MochiReq) ->
             %% 匹配到的模块，模块配置
             {Mod, ModOpts, HostTokens, Port, PathTokens, Bindings,
              AppRoot, StringPath} ->
-                BootstrapResource = webmachine_resource:new(x,x,x,x),
-                {ok,RS1} = Req:load_dispatch_data(Bindings,HostTokens,Port,
-                                                  PathTokens,AppRoot,StringPath),
-                XReq1 = {webmachine_request,RS1},
+                {ok, XReq1} = webmachine_request:load_dispatch_data(
+                             Bindings,HostTokens,Port,
+                             PathTokens,AppRoot,StringPath,Req),
                 try
+<<<<<<< HEAD
                     {ok, Resource} = BootstrapResource:wrap(Mod, ModOpts),
                     {ok,RS2} = XReq1:set_metadata('resource_module',
                                                   resource_module(Mod, ModOpts)),
                     %% 通过决策流，进行请求处理
+=======
+                    {ok, Resource} = webmachine_resource:wrap(
+                                       Mod, ModOpts),
+                    {ok, RS2} = webmachine_request:set_metadata(
+                                  'resource_module',
+                                  resource_module(Mod, ModOpts),
+                                  XReq1),
+>>>>>>> c6c2f2d4e41a2761840db7f3668a4e263a93d089
                     webmachine_decision_core:handle_request(Resource, RS2)
                 catch
                     error:Error ->
@@ -99,17 +130,82 @@ loop(Name, MochiReq) ->
         end
     end.
 
+-spec new_webmachine_req(mochiweb_request()) ->
+                                {module(),#wm_reqstate{}}
+                                    |{{error, term()}, #wm_reqstate{}}.
+new_webmachine_req(Request) ->
+    Method = mochiweb_request:get(method, Request),
+    Scheme = mochiweb_request:get(scheme, Request),
+    Version = mochiweb_request:get(version, Request),
+    {Headers, RawPath} =
+        case application:get_env(webmachine, rewrite_module) of
+            {ok, undefined} ->
+                {
+              mochiweb_request:get(headers, Request),
+              mochiweb_request:get(raw_path, Request)
+             };
+            {ok, RewriteMod} ->
+                do_rewrite(RewriteMod,
+                           Method,
+                           Scheme,
+                           Version,
+                           mochiweb_request:get(headers, Request),
+                           mochiweb_request:get(raw_path, Request))
+            end,
+    Socket = mochiweb_request:get(socket, Request),
+
+    InitialReqData = wrq:create(Method,Scheme,Version,RawPath,Headers),
+    InitialLogData = #wm_log_data{start_time=os:timestamp(),
+                                  method=Method,
+                                  headers=Headers,
+                                  path=RawPath,
+                                  version=Version,
+                                  response_code=404,
+                                  response_length=0},
+
+    InitState = #wm_reqstate{socket=Socket,
+                             log_data=InitialLogData,
+                             reqdata=InitialReqData},
+    InitReq = {webmachine_request,InitState},
+
+    case webmachine_request:get_peer(InitReq) of
+      {ErrorGetPeer = {error,_}, ErrorGetPeerReqState} ->
+        % failed to get peer
+        { ErrorGetPeer, webmachine_request:new (ErrorGetPeerReqState) };
+      {Peer, _ReqState} ->
+        case webmachine_request:get_sock(InitReq) of
+          {ErrorGetSock = {error,_}, ErrorGetSockReqState} ->
+            LogDataWithPeer = InitialLogData#wm_log_data {peer=Peer},
+            ReqStateWithSockErr =
+              ErrorGetSockReqState#wm_reqstate{log_data=LogDataWithPeer},
+            { ErrorGetSock, webmachine_request:new (ReqStateWithSockErr) };
+          {Sock, ReqState} ->
+            ReqData = wrq:set_sock(Sock, wrq:set_peer(Peer, InitialReqData)),
+            LogData =
+              InitialLogData#wm_log_data {peer=Peer, sock=Sock},
+            webmachine_request:new(ReqState#wm_reqstate{log_data=LogData,
+                                                        reqdata=ReqData})
+        end
+    end.
+
+do_rewrite(RewriteMod, Method, Scheme, Version, Headers, RawPath) ->
+    case RewriteMod:rewrite(Method, Scheme, Version, Headers, RawPath) of
+        %% only raw path has been rewritten (older style rewriting)
+        NewPath when is_list(NewPath) -> {Headers, NewPath};
+
+        %% headers and raw path rewritten (new style rewriting)
+        {NewHeaders, NewPath} -> {NewHeaders,NewPath}
+    end.
+
 handle_error(Code, Error, Req) ->
     {ok, ErrorHandler} = application:get_env(webmachine, error_handler),
-    {ErrorHTML,ReqState1} =
+    {ErrorHTML,Req1} =
         ErrorHandler:render_error(Code, Req, Error),
-    Req1 = {webmachine_request,ReqState1},
-    {ok,ReqState2} = Req1:append_to_response_body(ErrorHTML),
-    Req2 = {webmachine_request,ReqState2},
-    {ok,ReqState3} = Req2:send_response(Code),
-    Req3 = {webmachine_request,ReqState3},
-    {LogData,_ReqState4} = Req3:log_data(),
-    spawn(webmachine_log, log_access, [LogData]).
+    {ok,Req2} = webmachine_request:append_to_response_body(ErrorHTML, Req1),
+    {ok,Req3} = webmachine_request:send_response(Code, Req2),
+    {LogData,_ReqState4} = webmachine_request:log_data(Req3),
+    spawn(webmachine_log, log_access, [LogData]),
+    ok.
 
 get_wm_option(OptName, {WMOptions, OtherOptions}) ->
     {Value, UpdOtherOptions} =
@@ -159,8 +255,25 @@ application_set_unless_env(App, Var, Value) ->
             application:set_env(App, Var, Value)
     end.
 
+%% X-Forwarded-Host/Server can contain comma-separated values.
+%% Reference: https://httpd.apache.org/docs/current/mod/mod_proxy.html#x-headers
+%% In that case, we'll take the first as our host, since proxies will append
+%% additional values to the original.
+host_from_host_values(HostValues) ->
+    case HostValues of
+        [] ->
+            [];
+        [H|_] ->
+            case string:tokens(H, ",") of
+                [FirstHost|_] ->
+                    FirstHost;
+                [] ->
+                    H
+            end
+    end.
+
 host_headers(Req) ->
-    [ V || {V,_ReqState} <- [Req:get_header_value(H)
+    [ V || {V,_ReqState} <- [webmachine_request:get_header_value(H, Req)
                              || H <- ["x-forwarded-host",
                                       "x-forwarded-server",
                                       "host"]],
@@ -189,3 +302,33 @@ to_list(L) when is_list(L) ->
     L;
 to_list(A) when is_atom(A) ->
     atom_to_list(A).
+
+-ifdef(TEST).
+
+host_from_host_values_test_() ->
+    [
+     {"when a host value is multi-part it resolves the first host correctly",
+          ?_assertEqual("host1",
+                       host_from_host_values(["host1,host2,host3:443","other", "other1"]))
+     },
+     {"when a host value is multi-part it retains the port",
+          ?_assertEqual("host1:443",
+                       host_from_host_values(["host1:443,host2","other", "other1"]))
+     },
+     {"a single host per header is resolved correctly",
+          ?_assertEqual("host1:80",
+                       host_from_host_values(["host1:80","other", "other1"]))
+     },
+     {"a missing host is resolved correctly",
+          ?_assertEqual([],
+                       host_from_host_values([]))
+     }
+    ].
+
+    %[
+     %{"when a host value is multi-part it resolves the first host correctly",
+      %?_assertEqual("host1:443",
+                    %host_from_host_values(["host1,host2,host3:443","other", "other1"])) }
+    %].
+
+-endif.
