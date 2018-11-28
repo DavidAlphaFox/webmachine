@@ -20,6 +20,7 @@
 -export([new/3, wrap/2]).
 -export([do/3,log_d/2,stop/1]).
 
+-include("wm_compat.hrl").
 -include("wm_resource.hrl").
 -include("wm_reqdata.hrl").
 -include("wm_reqstate.hrl").
@@ -28,6 +29,12 @@
 -export_type([t/0]).
 
 -define(CALLBACK_ARITY, 2).
+
+%% Suppress Erlang/OTP 21 warnings about the new method to retrieve
+%% stacktraces.
+-ifdef(OTP_RELEASE).
+-compile({nowarn_deprecated_function, [{erlang, get_stacktrace, 0}]}).
+-endif.
 
 new(R_Mod, R_ModState, R_Trace) ->
     case erlang:module_loaded(R_Mod) of
@@ -203,8 +210,8 @@ resource_call(F, ReqData,
     Result = try
         %% Note: the argument list must match the definition of CALLBACK_ARITY
         apply(R_Mod, F, [ReqData, R_ModState])
-    catch C:R ->
-            Reason = {C, R, trim_trace(erlang:get_stacktrace())},
+    catch ?STPATTERN(C:R) ->
+            Reason = {C, R, trim_trace(?STACKTRACE)},
             {{error, Reason}, ReqData, R_ModState}
     end,
     case R_Trace of

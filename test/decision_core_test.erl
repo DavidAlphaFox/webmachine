@@ -17,6 +17,7 @@
 
 -ifdef(TEST).
 
+-include("wm_compat.hrl").
 -include("wm_reqdata.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -42,6 +43,12 @@ md5(Bin) ->
 -else.
 md5(Bin) ->
     crypto:md5(Bin).
+-endif.
+
+%% Suppress Erlang/OTP 21 warnings about the new method to retrieve
+%% stacktraces.
+-ifdef(OTP_RELEASE).
+-compile({nowarn_deprecated_function, [{erlang, get_stacktrace, 0}]}).
 -endif.
 
 -define(HTTP_1_0_METHODS, ['GET', 'POST', 'HEAD']).
@@ -329,8 +336,8 @@ setup() ->
         meck:new(webmachine_resource, MeckOpts),
         Ctx
     catch
-        T:E ->
-            io:format(user, "~n~p : ~p : ~p", [T, E, erlang:get_stacktrace()]),
+        ?STPATTERN(T:E) ->
+            io:format(user, "~n~p : ~p : ~p", [T, E, ?STACKTRACE]),
             error(setup_failed)
     end.
 
